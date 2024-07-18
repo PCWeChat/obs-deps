@@ -1,9 +1,8 @@
 param(
     [string] $Name = 'FFmpeg',
-    [string] $Version = '7.1.1',
+    [string] $Version = '6.1.1',
     [string] $Uri = 'https://github.com/FFmpeg/FFmpeg.git',
-    [string] $Hash = "db69d06eeeab4f46da15030a80d539efb4503ca8",
-    [array] $Targets = @('x64', 'arm64'),
+    [string] $Hash = "e38092ef9395d7049f871ef4d5411eb410e283e0",
     [array] $Patches = @(
         @{
             PatchFile = "${PSScriptRoot}/patches/FFmpeg/0001-flvdec-handle-unknown-Windows.patch"
@@ -23,7 +22,6 @@ function Setup {
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar nasm
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar make
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar perl
-        Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar gcc
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar pkgconf
     }
 }
@@ -51,10 +49,9 @@ function Configure {
     Log-Information "Configure (${Target})"
     Set-Location $Path
 
-    $TargetArch = @{
+    $TargetCPUs = @{
         x64 = 'x86_64'
         x86 = 'x86'
-        arm64 = 'arm64'
     }
 
     New-Item -ItemType Directory -Force "build_${Target}" > $null
@@ -63,28 +60,27 @@ function Configure {
         'bash'
         '../configure'
         ('--prefix="' + $($script:ConfigData.OutputPath -replace '([A-Fa-f]):','/$1' -replace '\\','/') + '"')
-        ('--arch=' + $($TargetArch[$Target]))
-        $(if ( $Target -ne $script:HostArchitecture ) { '--enable-cross-compile' })
+        ('--arch=' + $($TargetCPUs[$Target]))
         '--toolchain=msvc'
-        ('--extra-cflags=' + "'-D_WINDLL -MD -D_WIN32_WINNT=0x0A00" + $(if ( $Target -eq 'arm64' ) { ' -D__ARM_PCS_VFP' }) + "'")
+        ('--extra-cflags=' + "'-D_WINDLL -MD -D_WIN32_WINNT=0x0A00'")
         ('--extra-cxxflags=' + "'-MD -D_WIN32_WINNT=0x0A00'")
         ('--extra-ldflags=' + "'-APPCONTAINER:NO -MACHINE:${Target}'")
-        $(if ( $Target -eq 'arm64' ) { '--as=armasm64.exe','--cpu=armv8' })
         '--pkg-config=pkg-config'
-        $(if ( $Target -ne 'x86' ) { '--target-os=win64' } else { '--target-os=win32' })
-        $(if ( $Target -eq 'x64' ) { '--enable-libaom' })
-        $(if ( $Target -eq 'x64' ) { '--enable-libsvtav1' })
+        $(if ( $Target -eq 'x64' ) { '--target-os=win64' } else { '--target-os=win32' })
+        $(if ( $Target -eq 'x64' ) { '--disable-libaom' })
+        $(if ( $Target -eq 'x64' ) { '--disable-libsvtav1' })
         '--enable-libtheora'
         '--enable-libmp3lame'
         '--enable-w32threads'
-        '--enable-version3'
-        '--enable-gpl'
-        '--enable-libx264'
-        '--enable-libopus'
-        '--enable-libvorbis'
-        '--enable-libvpx'
-        '--enable-librist'
-        '--enable-libsrt'
+        '--disable-version3'
+        '--disable-gpl'
+        '--disable-libx264'
+        '--disable-libopus'
+        '--disable-libvorbis'
+        '--disable-libvpx'
+        '--disable-avfilter'
+        '--disable-librist'
+        '--disable-libsrt'
         '--enable-shared'
         '--enable-zlib'
         '--disable-static'
@@ -93,6 +89,7 @@ function Configure {
         '--disable-sdl2'
         '--disable-doc'
         '--disable-postproc'
+        '--disable-mediafoundation'
         $(if ( ! $script:Shared ) { ('--pkg-config-flags=' + "'--static'") })
         $(if ( $Configuration -eq 'Debug' ) { '--enable-debug' } else { '--disable-debug' })
         $(if ( $Configuration -eq 'RelWithDebInfo' ) { '--disable-stripping' })
@@ -111,13 +108,11 @@ function Configure {
         PKG_CONFIG_LIBDIR = $env:PKG_CONFIG_LIBDIR
         LDFLAGS = $env:LDFLAGS
         MSYS2_PATH_TYPE = $env:MSYS2_PATH_TYPE
-        PATH = $env:PATH
     }
     $env:CFLAGS = "$($script:CFlags) -I$($script:ConfigData.OutputPath -replace '([A-Fa-f]):','/$1' -replace '\\','/')/include"
     $env:CXXFLAGS = "$($script:CxxFlags) -I$($script:ConfigData.OutputPath -replace '([A-Fa-f]):','/$1' -replace '\\','/')/include"
     $env:PKG_CONFIG_LIBDIR = "$($script:ConfigData.OutputPath -replace '([A-Fa-f]):','/$1' -replace '\\','/')/lib/pkgconfig"
     $env:LDFLAGS = "-LIBPATH:$($script:ConfigData.OutputPath -replace '([A-Fa-f]):','/$1' -replace '\\','/')/lib"
-    $env:PATH = "$($script:WorkRoot -replace '([A-Fa-f]):','/$1' -replace '\\','/')/gas-preprocessor;${Env:PATH})"
     $env:MSYS2_PATH_TYPE = 'inherit'
     Invoke-DevShell @Params
     $Backup.GetEnumerator() | ForEach-Object { Set-Item -Path "env:\$($_.Key)" -Value $_.Value }
@@ -138,11 +133,9 @@ function Build {
     $Backup = @{
         MSYS2_PATH_TYPE = $env:MSYS2_PATH_TYPE
         VERBOSE = $env:VERBOSE
-        PATH = $env:PATH
     }
     $env:MSYS2_PATH_TYPE = 'inherit'
     $env:VERBOSE = $(if ( $VerbosePreference -eq 'Continue' ) { '1' })
-    $env:PATH = "$($script:WorkRoot -replace '([A-Fa-f]):','/$1' -replace '\\','/')/gas-preprocessor;${Env:PATH})"
     Invoke-DevShell @Params
     $Backup.GetEnumerator() | ForEach-Object { Set-Item -Path "env:\$($_.Key)" -Value $_.Value }
 }

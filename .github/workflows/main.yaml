@@ -3,23 +3,23 @@ name: build_deps
 on:
   push:
     branches:
-      - master
+      - flobs
     tags:
-      - '20[2-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      - "20[2-9][0-9]-[0-9][0-9]-[0-9][0-9]"
   pull_request:
     paths-ignore:
-      - '**.md'
+      - "**.md"
     branches:
-      - master
+      - flobs
 
 concurrency:
-  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   pre-checks:
     name: Run Pre-Checks
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     defaults:
       run:
         shell: bash
@@ -53,97 +53,6 @@ jobs:
 
           echo "shortHash=${GITHUB_SHA:0:9}" >> $GITHUB_OUTPUT
 
-  ffmpeg-macos-build:
-    name: Build FFmpeg for macOS
-    runs-on: macos-15
-    needs: pre-checks
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [macos-arm64, macos-x86_64]
-        include:
-          - target: macos-arm64
-            config: Release
-            type: static
-          - target: macos-x86_64
-            config: Release
-            type: static
-    defaults:
-      run:
-        shell: zsh --no-rcs --errexit --pipefail {0}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        id: setup
-        run: |
-          print '::group::Enable Xcode 16.1'
-          sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
-          print '::endgroup::'
-
-          local -a unwanted_formulas=(llvm gcc postgresql openjdk sox libsndfile flac libvorbis opusfile \
-            libogg composer php gd freetype fontconfig webp libpng lame libtiff opus kotlin \
-            sbt libxft libxcb pkg-config@0.29.2)
-
-          local -a remove_formulas=()
-          for formula (${unwanted_formulas}) {
-            if [[ -d ${HOMEBREW_PREFIX}/Cellar/${formula} ]] remove_formulas+=(${formula})
-          }
-
-          if (( #remove_formulas )) brew uninstall --ignore-dependencies ${remove_formulas}
-
-          local -r date_string=$(date +"%Y-%m-%d")
-          local -r target='${{ matrix.target }}'
-
-          artifact_name="ffmpeg-${target}-${{ needs.pre-checks.outputs.shortHash }}"
-          file_name="${target%%-*}-ffmpeg-${date_string}-${target##*-}.tar.xz"
-          dsym_artifact_name="ffmpeg-${target}-dSYMs-${{ needs.pre-checks.outputs.shortHash }}"
-          dsym_file_name="${target%%-*}-ffmpeg-${date_string}-${target##*-}-dSYMs.tar.xz"
-
-          print "artifactName=${artifact_name}" >> $GITHUB_OUTPUT
-          print "artifactFileName=${file_name}" >> $GITHUB_OUTPUT
-          print "dsymArtifactName=${dsym_artifact_name}" >> $GITHUB_OUTPUT
-          print "dsymArtifactFileName=${dsym_file_name}" >> $GITHUB_OUTPUT
-          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
-
-      - name: Restore Compilation Cache
-        id: ccache-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ matrix.target }}-ccache-ffmpeg-${{ steps.setup.outputs.ccacheDate }}
-          restore-keys: |
-            ${{ matrix.target }}-ccache-ffmpeg-
-
-      - name: Build FFmpeg
-        uses: ./.github/actions/build-ffmpeg
-        with:
-          target: ${{ matrix.target }}
-          type: ${{ matrix.type }}
-          config: ${{ matrix.config }}
-
-      - name: Publish Build Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.artifactName }}
-          path: ${{ github.workspace }}/${{ matrix.target }}/${{ steps.setup.outputs.artifactFileName }}
-
-      - name: Publish Debug Symbol Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.dsymArtifactName }}
-          path: ${{ github.workspace }}/${{ matrix.target }}/${{ steps.setup.outputs.dsymArtifactFileName }}
-
-      - name: Save Compilation Cache
-        if: github.event_name == 'push'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ matrix.target }}-ccache-ffmpeg-${{ steps.setup.outputs.ccacheDate }}
-
   ffmpeg-windows-build:
     name: Build FFmpeg for Windows
     runs-on: windows-2022
@@ -151,12 +60,12 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, arm64]
+        target: [x64, x86]
         include:
           - target: x64
             config: Release
             type: static
-          - target: arm64
+          - target: x86
             config: Release
             type: static
     defaults:
@@ -192,253 +101,6 @@ jobs:
           name: ${{ steps.setup.outputs.artifactName }}
           path: ${{ github.workspace }}\windows\${{ steps.setup.outputs.artifactFileName }}
 
-  ffmpeg-package-universal:
-    name: Build FFmpeg (Universal)
-    runs-on: macos-15
-    needs: [pre-checks, ffmpeg-macos-build]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create universal binary package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/create-universal
-        with:
-          arm64: ffmpeg-macos-arm64-${{ needs.pre-checks.outputs.shortHash }}
-          x86_64: ffmpeg-macos-x86_64-${{ needs.pre-checks.outputs.shortHash }}
-          outputName: ffmpeg-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
-
-      - name: Create universal dSYM package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/create-universal
-        with:
-          arm64: ffmpeg-macos-arm64-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-          x86_64: ffmpeg-macos-x86_64-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-          outputName: ffmpeg-macos-universal-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-
-  macos-build:
-    name: Build macOS Dependencies
-    runs-on: macos-15
-    needs: pre-checks
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [macos-arm64, macos-x86_64]
-        include:
-          - target: macos-arm64
-            config: Release
-            type: static
-          - target: macos-x86_64
-            config: Release
-            type: static
-    defaults:
-      run:
-        shell: zsh --no-rcs --errexit --pipefail {0}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        id: setup
-        run: |
-          : Setup Environment
-          print '::group::Enable Xcode 16.1'
-          sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
-          print '::endgroup::'
-
-          local -a unwanted_formulas=(llvm gcc pkg-config@0.29.2)
-
-          local -a remove_formulas=()
-          for formula (${unwanted_formulas}) {
-            if [[ -d ${HOMEBREW_PREFIX}/Cellar/${formula} ]] remove_formulas+=(${formula})
-          }
-
-          if (( #remove_formulas )) brew uninstall --ignore-dependencies ${remove_formulas}
-
-          local -r date_string=$(date +"%Y-%m-%d")
-          local -r target='${{ matrix.target }}'
-
-          artifact_name="deps-${target}-${{ needs.pre-checks.outputs.shortHash }}"
-          file_name="${target%%-*}-deps-${date_string}-${target##*-}.tar.xz"
-          dsym_artifact_name="deps-${target}-dSYMs-${{ needs.pre-checks.outputs.shortHash }}"
-          dsym_file_name="${target%%-*}-deps-${date_string}-${target##*-}-dSYMs.tar.xz"
-
-          echo "artifactName=${artifact_name}" >> $GITHUB_OUTPUT
-          echo "artifactFileName=${file_name}" >> $GITHUB_OUTPUT
-          echo "dsymArtifactName=${dsym_artifact_name}" >> $GITHUB_OUTPUT
-          echo "dsymArtifactFileName=${dsym_file_name}" >> $GITHUB_OUTPUT
-          echo "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
-
-      - name: Restore Compilation Cache
-        id: ccache-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ matrix.target }}-ccache-deps-${{ steps.setup.outputs.ccacheDate }}
-          restore-keys: |
-            ${{ matrix.target }}-ccache-deps-
-
-      - name: Build macOS Dependencies
-        uses: ./.github/actions/build-deps
-        with:
-          target: ${{ matrix.target }}
-          type: ${{ matrix.type }}
-          config: ${{ matrix.config }}
-
-      - name: Publish Build Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.artifactName }}
-          path: ${{ github.workspace }}/${{ matrix.target }}/${{ steps.setup.outputs.artifactFileName }}
-
-      - name: Publish Debug Symbol Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.dsymArtifactName }}
-          path: ${{ github.workspace }}/${{ matrix.target }}/${{ steps.setup.outputs.dsymArtifactFileName }}
-
-      - name: Save Compilation Cache
-        if: github.event_name == 'push' && steps.ccache-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ${{ matrix.target }}-ccache-deps-${{ steps.setup.outputs.ccacheDate }}
-
-  macos-package-universal:
-    name: Build macOS Dependencies (Universal)
-    runs-on: macos-15
-    needs: [pre-checks, macos-build]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create universal binary package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/create-universal
-        with:
-          arm64: deps-macos-arm64-${{ needs.pre-checks.outputs.shortHash }}
-          x86_64: deps-macos-x86_64-${{ needs.pre-checks.outputs.shortHash }}
-          outputName: deps-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
-
-      - name: Create universal dSYM package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/create-universal
-        with:
-          arm64: deps-macos-arm64-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-          x86_64: deps-macos-x86_64-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-          outputName: deps-macos-universal-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-
-  macos-qt6-build:
-    name: Build Qt6 (macOS)
-    runs-on: macos-15
-    needs: pre-checks
-    defaults:
-      run:
-        shell: zsh --no-rcs --errexit --pipefail {0}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        id: setup
-        run: |
-          : Setup Environment
-          print '::group::Enable Xcode 16.1'
-          sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
-          print '::endgroup::'
-
-          local -a unwanted_formulas=(llvm gcc pkg-config@0.29.2)
-
-          local -a remove_formulas=()
-          for formula (${unwanted_formulas}) {
-            if [[ -d ${HOMEBREW_PREFIX}/Cellar/${formula} ]] remove_formulas+=(${formula})
-          }
-
-          if (( #remove_formulas )) brew uninstall --ignore-dependencies ${remove_formulas}
-
-          local -r date_string=$(date +"%Y-%m-%d")
-          artifact_name="qt6-macos-universal-${{ needs.pre-checks.outputs.shortHash }}"
-          file_name="macos-deps-qt6-${date_string}-universal.tar.xz"
-          dsym_artifact_name="qt6-macos-universal-dSYMs-${{ needs.pre-checks.outputs.shortHash }}"
-          dsym_file_name="macos-deps-qt6-${date_string}-universal-dSYMs.tar.xz"
-
-          print "artifactName=${artifact_name}" >> $GITHUB_OUTPUT
-          print "artifactFileName=${file_name}" >> $GITHUB_OUTPUT
-          print "dsymArtifactName=${dsym_artifact_name}" >> $GITHUB_OUTPUT
-          print "dsymArtifactFileName=${dsym_file_name}" >> $GITHUB_OUTPUT
-          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
-
-      - name: Restore Compilation Cache
-        id: ccache-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: macos-universal-ccache-qt6-${{ steps.setup.outputs.ccacheDate }}
-          restore-keys: |
-            macos-universal-ccache-qt6-
-
-      - name: Build macOS Qt6
-        uses: ./.github/actions/build-qt
-        with:
-          target: macos-universal
-          config: Release
-
-      - name: Publish Build Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.artifactName }}
-          path: ${{ github.workspace }}/macos-universal/${{ steps.setup.outputs.artifactFileName }}
-
-      - name: Publish Debug Symbol Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.dsymArtifactName }}
-          path: ${{ github.workspace }}/macos-universal/${{ steps.setup.outputs.dsymArtifactFileName }}
-
-      - name: Save Compilation Cache
-        if: github.event_name == 'push' && steps.ccache-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: macos-universal-ccache-qt6-${{ steps.setup.outputs.ccacheDate }}
-
-  macos-qt6-package:
-    name: Create macOS Qt6 (${{ matrix.target }})
-    runs-on: macos-15
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [macos-arm64, macos-x86_64]
-        include:
-          - target: macos-x86_64
-            config: Release
-          - target: macos-arm64
-            config: Release
-    needs: [pre-checks, macos-qt6-build]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create single architecture binary package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/create-single-arch
-        with:
-          base: qt6-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
-          target: ${{ matrix.target }}
-          outputName: qt6-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
-
-      - name: Create single architecture dSYM package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/create-single-arch
-        with:
-          base: qt6-macos-universal-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-          target: ${{ matrix.target }}
-          outputName: qt6-${{ matrix.target }}-dSYMs-${{ needs.pre-checks.outputs.shortHash }}
-
   windows-build:
     name: Build Windows Dependencies
     runs-on: windows-2022
@@ -446,15 +108,12 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86, arm64]
+        target: [x64, x86]
         include:
           - target: x64
             config: Release
             type: static
           - target: x86
-            config: Release
-            type: static
-          - target: arm64
             config: Release
             type: static
     defaults:
@@ -476,16 +135,16 @@ jobs:
           "artifactName=${ArtifactName}" >> $env:GITHUB_OUTPUT
           "artifactFileName=${FileName}" >> $env:GITHUB_OUTPUT
 
-      - name: Build libajantv2 Debug
+      - name: Build ntv2 Debug
         if: matrix.target == 'x64'
         shell: pwsh
         run: |
-          # Build libajantv2 Debug
+          # Build ntv2 Debug
 
           $Params = @{
             Target = '${{ matrix.target }}'
             Configuration = 'Debug'
-            Dependencies = 'libajantv2'
+            Dependencies = 'ntv2'
           }
 
           ./Build-Dependencies.ps1 @Params
@@ -507,7 +166,6 @@ jobs:
           Remove-Item -Recurse -Force ${{ github.workspace }}/windows_build_temp
 
       - name: Build qrcodegencpp Debug
-        if: matrix.target == 'x64' || matrix.target == 'arm64'
         shell: pwsh
         run: |
           # Build qrcodegencpp Debug
@@ -537,18 +195,13 @@ jobs:
 
   windows-qt6-build:
     name: Build Qt6 (Windows)
+    runs-on: windows-2022
     needs: pre-checks
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, arm64]
+        target: [x64, x86]
         config: [RelWithDebInfo, Debug]
-        include:
-          - target: x64
-            runner-os: windows-2022
-          - target: arm64
-            runner-os: windows-11-arm
-    runs-on: ${{ matrix.runner-os }}
 
     steps:
       - name: Checkout
@@ -583,7 +236,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, arm64]
+        target: [x64, x86]
     needs: [pre-checks, windows-qt6-build]
     steps:
       - name: Checkout
@@ -600,9 +253,9 @@ jobs:
 
   make-release:
     name: Create and upload release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-    needs: [ffmpeg-package-universal, ffmpeg-windows-build, macos-package-universal, macos-qt6-package, windows-build, windows-qt6-package]
+    needs: [ffmpeg-windows-build, windows-build, windows-qt6-package]
     defaults:
       run:
         shell: bash
@@ -620,9 +273,8 @@ jobs:
         run: |
           : Package Windows dependencies
           shopt -s extglob
-          shopt -s nullglob
 
-          for arch in x64 x86 arm64; do
+          for arch in x64 x86; do
             _temp=$(mktemp -d)
             pushd "${_temp}" > /dev/null
 
@@ -637,39 +289,9 @@ jobs:
             zip -r windows-deps-${{ steps.metadata.outputs.version }}-${arch}.zip -- *
             mv windows-deps-${{ steps.metadata.outputs.version }}-${arch}.zip ${GITHUB_WORKSPACE}
 
-            files=("${GITHUB_WORKSPACE}"/qt6-windows-"${arch}"-!(*-@(Debug|RelWithDebInfo|Release|MinSizeRel))/*.zip)
-            for artifact in "${files[@]}"; do
-              mv "${artifact}" "${GITHUB_WORKSPACE}"
-            done
+            mv ${GITHUB_WORKSPACE}/qt6-windows-${arch}-!(*-@(Debug|RelWithDebInfo|Release|MinSizeRel))/*.zip ${GITHUB_WORKSPACE}
             popd > /dev/null
           done
-
-
-      - name: Package macOS dependencies
-        run: |
-          : Package macOS dependencies
-          shopt -s extglob
-
-          for arch in arm64 x86_64 universal; do
-            _temp=$(mktemp -d)
-            pushd "${_temp}" > /dev/null
-
-            for artifact in ${GITHUB_WORKSPACE}/**/macos-@(deps|ffmpeg)-!(qt6*)-${arch}?(-dSYMs).*; do
-              case ${artifact} in
-                *.zip) unzip -o ${artifact} > /dev/null ;;
-                *.tar.xz) XZ_OPT=-T0 tar -xvJf ${artifact} ;;
-                *.tar.gz) tar -xvzf ${artifact} ;;
-              esac
-            done
-
-            XZ_OPT=-T0 tar -cvJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz -- !(*.dSYM)
-            XZ_OPT=-T0 tar -cvJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}-dSYMs.tar.xz -- *.dSYM
-            mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}?(-dSYMs).tar.xz ${GITHUB_WORKSPACE}
-
-            popd > /dev/null
-          done
-
-          mv ${GITHUB_WORKSPACE}/qt6-macos-*/*.tar.xz ${{ github.workspace }}
 
       - name: Generate Checksums
         run: |
@@ -682,7 +304,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
         with:
           draft: false
           prerelease: false
@@ -691,8 +313,4 @@ jobs:
           body_path: ${{ github.workspace }}/CHECKSUMS.txt
           files: |
             ${{ github.workspace }}/windows-*-x64*.zip
-            ${{ github.workspace }}/windows-*-arm64*.zip
             ${{ github.workspace }}/windows-*-x86*.zip
-            ${{ github.workspace }}/macos-*-arm64?(-dSYMs).tar.xz
-            ${{ github.workspace }}/macos-*-x86_64?(-dSYMs).tar.xz
-            ${{ github.workspace }}/macos-*-universal?(-dSYMs).tar.xz
