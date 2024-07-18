@@ -187,7 +187,7 @@ config() {
         --disable-mediafoundation
       )
 
-      if [[ ${arch} == x64 ]] args+=(--enable-libaom --enable-libsvtav1)
+      # if [[ ${arch} == x64 ]] args+=(--enable-libaom --enable-libsvtav1)
     ;;
   }
 
@@ -198,14 +198,16 @@ config() {
     --extra-cflags="${ff_cflags}"
     --extra-cxxflags="${ff_cxxflags}"
     --extra-ldflags="${ff_ldflags}"
-    --enable-version3
-    --enable-gpl
-    --enable-libx264
-    --enable-libopus
-    --enable-libvorbis
-    --enable-libvpx
-    --enable-librist
-    --enable-libsrt
+    # --enable-version3
+    # --enable-gpl
+    --disable-libaom
+    --disable-libsvtav1
+    --disable-libopus
+    --disable-libvorbis
+    --disable-libvpx
+    --disable-librist
+    --disable-avfilter
+    --disable-libsrt
     --enable-shared
     --disable-static
     --disable-libjack
