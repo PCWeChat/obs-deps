@@ -79,7 +79,6 @@ function Configure {
         '--disable-libopus'
         '--disable-libvorbis'
         '--disable-libvpx'
-        '--disable-avfilter'
         '--disable-librist'
         '--disable-libsrt'
         '--enable-shared'

@@ -205,7 +205,6 @@ config() {
     --disable-libvorbis
     --disable-libvpx
     --disable-librist
-    --disable-avfilter
     --disable-libsrt
     --enable-shared
     --disable-static
