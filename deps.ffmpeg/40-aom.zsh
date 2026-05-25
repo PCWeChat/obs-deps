@@ -68,7 +68,7 @@ config() {
   )
 
   case ${target} {
-    macos-x86_64) args+=(-DENABLE_NASM=OFF -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-macos.cmake") ;;
+    macos-x86_64) args+=(-DENABLE_NASM=OFF -DAOM_TARGET_CPU=generic -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-macos.cmake") ;;
     macos-*) args+=(-DENABLE_NASM=ON -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-macos.cmake") ;;
     windows-x*) args+=(-DENABLE_NASM=ON -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-mingw-gcc.cmake")
   }
