@@ -402,19 +402,33 @@ jobs:
       - name: Package macOS dependencies
         run: |
           : Package macOS dependencies
+          shopt -s extglob
           shopt -s nullglob
 
-          echo "=== All downloaded artifacts ==="
-          find ${GITHUB_WORKSPACE} -name "*.tar.xz" -type f
+          for arch in arm64 x86_64 universal; do
+            _temp=$(mktemp -d)
+            pushd "${_temp}" > /dev/null
 
-          # Move all macOS tar.xz files to workspace root for release upload
-          for artifact in $(find ${GITHUB_WORKSPACE} -name "macos-*.tar.xz" -type f); do
-            echo "Found: ${artifact}"
-            cp "${artifact}" ${GITHUB_WORKSPACE}/
+            for artifact in ${GITHUB_WORKSPACE}/**/macos-@(deps|ffmpeg)-!(qt6*)-${arch}?(-dSYMs).*; do
+              case ${artifact} in
+                *.zip) unzip -o ${artifact} > /dev/null ;;
+                *.tar.xz) XZ_OPT=-T0 tar -xJf ${artifact} ;;
+                *.tar.gz) tar -xzf ${artifact} ;;
+              esac
+            done
+
+            if [ "$(ls -A . 2>/dev/null)" ]; then
+              XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz -- !(*.dSYM)
+              mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz ${GITHUB_WORKSPACE}
+
+              if compgen -G "*.dSYM" > /dev/null; then
+                XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}-dSYMs.tar.xz -- *.dSYM
+                mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}-dSYMs.tar.xz ${GITHUB_WORKSPACE}
+              fi
+            fi
+
+            popd > /dev/null
           done
-
-          echo "=== Files ready for release ==="
-          ls -la ${GITHUB_WORKSPACE}/macos-*.tar.xz 2>/dev/null || echo "No macOS files found"
 
       - name: Generate Checksums
         run: |
@@ -437,4 +451,4 @@ jobs:
           files: |
             ${{ github.workspace }}/windows-*-x64*.zip
             ${{ github.workspace }}/windows-*-x86*.zip
-            ${{ github.workspace }}/macos-*.tar.xz
+            ${{ github.workspace }}/macos-deps-*.tar.xz
