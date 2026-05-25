@@ -328,11 +328,36 @@ jobs:
           name: ${{ steps.setup.outputs.artifactName }}
           path: ${{ github.workspace }}\windows\${{ steps.setup.outputs.artifactFileName }}
 
+  macos-universal-build:
+    name: Create macOS Universal Build
+    runs-on: macos-14
+    needs: [pre-checks, ffmpeg-macos-build, macos-build]
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create universal FFmpeg
+        uses: ./.github/actions/create-universal
+        with:
+          arm64: ffmpeg-macos-macos-arm64-${{ needs.pre-checks.outputs.shortHash }}
+          x86_64: ffmpeg-macos-macos-x86_64-${{ needs.pre-checks.outputs.shortHash }}
+          outputName: ffmpeg-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
+
+      - name: Create universal deps
+        uses: ./.github/actions/create-universal
+        with:
+          arm64: deps-macos-macos-arm64-${{ needs.pre-checks.outputs.shortHash }}
+          x86_64: deps-macos-macos-x86_64-${{ needs.pre-checks.outputs.shortHash }}
+          outputName: deps-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
+
   make-release:
     name: Create and upload release
     runs-on: ubuntu-22.04
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-    needs: [ffmpeg-macos-build, macos-build, ffmpeg-windows-build, windows-build]
+    needs: [ffmpeg-macos-build, macos-build, macos-universal-build, ffmpeg-windows-build, windows-build]
     defaults:
       run:
         shell: bash
@@ -378,25 +403,14 @@ jobs:
           echo "=== All downloaded artifacts ==="
           find ${GITHUB_WORKSPACE} -name "*.tar.xz" -type f
 
-          for arch in arm64 x86_64; do
-            _temp=$(mktemp -d)
-            pushd "${_temp}" > /dev/null
-
-            for artifact in $(find ${GITHUB_WORKSPACE} -path "*macos*${arch}*" -name "*.tar.xz" -type f); do
-              echo "Extracting: ${artifact}"
-              XZ_OPT=-T0 tar -xJf "${artifact}"
-            done
-
-            if [ "$(ls -A .)" ]; then
-              XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz -- *
-              mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz ${GITHUB_WORKSPACE}
-              echo "Created: macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz"
-            else
-              echo "WARNING: No macOS artifacts found for ${arch}"
-            fi
-
-            popd > /dev/null
+          # Move all macOS tar.xz files to workspace root for release upload
+          for artifact in $(find ${GITHUB_WORKSPACE} -name "macos-*.tar.xz" -type f); do
+            echo "Found: ${artifact}"
+            cp "${artifact}" ${GITHUB_WORKSPACE}/
           done
+
+          echo "=== Files ready for release ==="
+          ls -la ${GITHUB_WORKSPACE}/macos-*.tar.xz 2>/dev/null || echo "No macOS files found"
 
       - name: Generate Checksums
         run: |
@@ -419,4 +433,4 @@ jobs:
           files: |
             ${{ github.workspace }}/windows-*-x64*.zip
             ${{ github.workspace }}/windows-*-x86*.zip
-            ${{ github.workspace }}/macos-deps-*.tar.xz
+            ${{ github.workspace }}/macos-*.tar.xz
