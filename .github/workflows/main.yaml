@@ -53,6 +53,188 @@ jobs:
 
           echo "shortHash=${GITHUB_SHA:0:9}" >> $GITHUB_OUTPUT
 
+  ffmpeg-macos-build:
+    name: Build FFmpeg for macOS
+    runs-on: macos-14
+    needs: pre-checks
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [macos-arm64, macos-x86_64]
+        include:
+          - target: macos-arm64
+            config: Release
+            type: static
+          - target: macos-x86_64
+            config: Release
+            type: static
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        id: setup
+        run: |
+          : Setup Environment
+          print '::group::Enable Xcode 15.2'
+          sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+          print '::endgroup::'
+
+          local -a to_remove=()
+
+          for formula (llvm gcc postgresql openjdk sox libsndfile flac libvorbis opusfile \
+            libogg composer php gd freetype fontconfig webp libpng lame libtiff opus kotlin \
+            sbt libxft libxcb) {
+            if [[ -d /usr/local/opt/${formula} ]] to_remove+=(${formula})
+          }
+
+          if (( #to_remove )) brew uninstall --ignore-dependencies ${to_remove}
+
+          local -r date_string=$(date +"%Y-%m-%d")
+          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
+
+      - name: Restore Compilation Cache
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ matrix.target }}-ccache-ffmpeg-${{ steps.setup.outputs.ccacheDate }}
+          restore-keys: |
+            ${{ matrix.target }}-ccache-ffmpeg-
+
+      - name: Build FFmpeg
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          target: ${{ matrix.target }}
+          type: ${{ matrix.type }}
+          config: ${{ matrix.config }}
+
+      - name: Publish Build Artifacts
+        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
+          path: ${{ github.workspace }}/macos/*.tar.xz
+
+  macos-build:
+    name: Build macOS Dependencies
+    runs-on: macos-14
+    needs: pre-checks
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [macos-arm64, macos-x86_64]
+        include:
+          - target: macos-arm64
+            config: Release
+            type: static
+          - target: macos-x86_64
+            config: Release
+            type: static
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        id: setup
+        run: |
+          : Setup Environment
+          print '::group::Enable Xcode 15.2'
+          sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+          print '::endgroup::'
+
+          to_remove=()
+
+          for formula (llvm gcc) {
+            if [[ -d /usr/local/opt/"${formula}" ]] to_remove+=(${formula})
+          }
+
+          if (( #to_remove )) brew uninstall --ignore-dependencies ${to_remove}
+
+          local -r date_string=$(date +"%Y-%m-%d")
+          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
+
+      - name: Restore Compilation Cache
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ matrix.target }}-ccache-deps-${{ matrix.config }}-${{ steps.setup.outputs.ccacheDate }}
+          restore-keys: |
+            ${{ matrix.target }}-ccache-deps-${{ matrix.config }}-
+
+      - name: Build macOS Dependencies
+        uses: ./.github/actions/build-deps
+        with:
+          target: ${{ matrix.target }}
+          type: ${{ matrix.type }}
+          config: ${{ matrix.config }}
+
+      - name: Publish Build Artifacts
+        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
+        uses: actions/upload-artifact@v4
+        with:
+          name: deps-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
+          path: ${{ github.workspace }}/macos/*.tar.xz
+
+  macos-qt6-build:
+    name: Build Qt6 (macOS)
+    runs-on: macos-14
+    needs: pre-checks
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        id: setup
+        run: |
+          : Setup Environment
+          print '::group::Enable Xcode 15.2'
+          sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+          print '::endgroup::'
+
+          local -a to_remove=()
+
+          for formula (llvm gcc) {
+            if [[ -d /usr/local/opt/"${formula}" ]] to_remove+=(${formula})
+          }
+
+          if (( #to_remove )) brew uninstall --ignore-dependencies ${to_remove}
+
+          local -r date_string=$(date +"%Y-%m-%d")
+          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
+
+      - name: Restore Compilation Cache
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: macos-universal-ccache-qt6-${{ steps.setup.outputs.ccacheDate }}
+          restore-keys: |
+            macos-universal-ccache-qt6-
+
+      - name: Build macOS Qt
+        uses: ./.github/actions/build-qt
+        with:
+          target: macos-universal
+          config: Release
+
+      - name: Publish Build Artifacts
+        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt6-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
+          path: ${{ github.workspace }}/macos/*.tar.xz
+
   ffmpeg-windows-build:
     name: Build FFmpeg for Windows
     runs-on: windows-2022

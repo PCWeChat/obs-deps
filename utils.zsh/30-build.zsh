@@ -93,6 +93,7 @@ setup_build_parameters() {
     -DCMAKE_INSTALL_PREFIX=${target_config[output_dir]}
     -DCMAKE_PREFIX_PATH=${target_config[output_dir]}
     -DCMAKE_BUILD_TYPE=${2}
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     --no-warn-unused-cli
   )
 

@@ -88,6 +88,7 @@ function Setup-BuildParameters {
         "-DCMAKE_PREFIX_PATH=$($script:ConfigData.OutputPath)"
         "-DCMAKE_IGNORE_PREFIX_PATH=C:\Strawberry\c"
         "-DCMAKE_BUILD_TYPE=${script:Configuration}"
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
         '--no-warn-unused-cli'
     )
 
