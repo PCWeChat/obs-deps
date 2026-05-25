@@ -124,7 +124,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
-          path: ${{ github.workspace }}/macos/*.tar.xz
+          path: ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
 
   macos-build:
     name: Build macOS Dependencies
@@ -188,7 +188,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deps-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
-          path: ${{ github.workspace }}/macos/*.tar.xz
+          path: ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
 
   ffmpeg-windows-build:
     name: Build FFmpeg for Windows
@@ -375,17 +375,24 @@ jobs:
           : Package macOS dependencies
           shopt -s nullglob
 
+          echo "=== All downloaded artifacts ==="
+          find ${GITHUB_WORKSPACE} -name "*.tar.xz" -type f
+
           for arch in arm64 x86_64; do
             _temp=$(mktemp -d)
             pushd "${_temp}" > /dev/null
 
-            for artifact in ${GITHUB_WORKSPACE}/*macos*${arch}*/*.tar.xz; do
+            for artifact in $(find ${GITHUB_WORKSPACE} -path "*macos*${arch}*" -name "*.tar.xz" -type f); do
+              echo "Extracting: ${artifact}"
               XZ_OPT=-T0 tar -xJf "${artifact}"
             done
 
             if [ "$(ls -A .)" ]; then
               XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz -- *
               mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz ${GITHUB_WORKSPACE}
+              echo "Created: macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz"
+            else
+              echo "WARNING: No macOS artifacts found for ${arch}"
             fi
 
             popd > /dev/null
