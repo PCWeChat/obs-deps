@@ -353,7 +353,7 @@ jobs:
             _temp=$(mktemp -d)
             pushd "${_temp}" > /dev/null
 
-            for artifact in ${GITHUB_WORKSPACE}/**/windows-@(deps|ffmpeg)-${arch}.*; do
+            for artifact in ${GITHUB_WORKSPACE}/**/windows-@(deps|ffmpeg)-*-${arch}.*; do
               case ${artifact} in
                 *.zip) unzip -o ${artifact} > /dev/null ;;
                 *.tar.xz) XZ_OPT=-T0 tar -xJf ${artifact} ;;
