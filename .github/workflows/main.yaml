@@ -83,6 +83,10 @@ jobs:
           sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
           print '::endgroup::'
 
+          print '::group::Install/upgrade nasm'
+          brew install nasm || brew upgrade nasm
+          print '::endgroup::'
+
           local -a to_remove=()
 
           for formula (llvm gcc postgresql openjdk sox libsndfile flac libvorbis opusfile \
