@@ -370,6 +370,27 @@ jobs:
             popd > /dev/null
           done
 
+      - name: Package macOS dependencies
+        run: |
+          : Package macOS dependencies
+          shopt -s nullglob
+
+          for arch in arm64 x86_64; do
+            _temp=$(mktemp -d)
+            pushd "${_temp}" > /dev/null
+
+            for artifact in ${GITHUB_WORKSPACE}/*macos*${arch}*/*.tar.xz; do
+              XZ_OPT=-T0 tar -xJf "${artifact}"
+            done
+
+            if [ "$(ls -A .)" ]; then
+              XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz -- *
+              mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz ${GITHUB_WORKSPACE}
+            fi
+
+            popd > /dev/null
+          done
+
       - name: Generate Checksums
         run: |
           : Generate Checksums
@@ -391,3 +412,4 @@ jobs:
           files: |
             ${{ github.workspace }}/windows-*-x64*.zip
             ${{ github.workspace }}/windows-*-x86*.zip
+            ${{ github.workspace }}/macos-deps-*.tar.xz
