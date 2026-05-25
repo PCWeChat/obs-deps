@@ -2,9 +2,9 @@ autoload -Uz log_debug log_error log_info log_status log_output
 
 ## Dependency Information
 local name='ntv2'
-local version='16.2'
-local url='https://github.com/aja-video/ntv2.git'
-local hash='0acbac70a0b5e6509cca78cfbf69974c73c10db9'
+local version='17.0.1'
+local url='https://github.com/aja-video/libajantv2.git'
+local hash='b6acce6b135c3d9ae7a2bce966180b159ced619f'
 
 ## Dependency Overrides
 local -i shared_libs=0
@@ -34,11 +34,16 @@ config() {
 
   args=(
     ${cmake_flags}
-    -DAJA_BUILD_OPENSOURCE=ON
-    -DAJA_BUILD_APPS=OFF
+    -DAJA_BUILD_SHARED="${_onoff[(( shared_libs + 1 ))]}"
+    -DAJANTV2_DISABLE_DEMOS=ON
+    -DAJANTV2_DISABLE_DRIVER=ON
+    -DAJANTV2_DISABLE_TESTS=ON
+    -DAJANTV2_DISABLE_TOOLS=ON
+    -DAJANTV2_DISABLE_PLUGINS=ON
     -DAJA_INSTALL_SOURCES=OFF
     -DAJA_INSTALL_HEADERS=ON
-    -DAJA_BUILD_SHARED="${_onoff[(( shared_libs + 1 ))]}"
+    -DAJA_INSTALL_MISC=OFF
+    -DAJA_INSTALL_CMAKE=OFF
   )
 
   cd ${dir}
@@ -52,7 +57,15 @@ build() {
   log_info "Build (%F{3}${target}%f)"
 
   cd ${dir}
-  cmake --build build_${arch} --config ${config}
+  
+  args=(
+    --build build_${arch}
+    --config ${config}
+  )
+
+  if (( _loglevel > 1 )) args+=(--verbose)
+
+  cmake ${args}
 }
 
 install() {

@@ -139,12 +139,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86]
+        target: [x64]
         include:
           - target: x64
-            config: Release
-            type: static
-          - target: x86
             config: Release
             type: static
     defaults:
@@ -240,16 +237,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build ntv2 Debug
+      - name: Build libajantv2 Debug
         if: matrix.target == 'x64'
         shell: pwsh
         run: |
-          # Build ntv2 Debug
+          # Build libajantv2 Debug
 
           $Params = @{
             Target = '${{ matrix.target }}'
             Configuration = 'Debug'
-            Dependencies = 'ntv2'
+            Dependencies = 'libajantv2'
           }
 
           ./Build-Dependencies.ps1 @Params
@@ -271,6 +268,7 @@ jobs:
           Remove-Item -Recurse -Force ${{ github.workspace }}/windows_build_temp
 
       - name: Build qrcodegencpp Debug
+        if: matrix.target == 'x64'
         shell: pwsh
         run: |
           # Build qrcodegencpp Debug
@@ -343,7 +341,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86]
+        target: [x64]
         config: [RelWithDebInfo, Debug]
 
     steps:

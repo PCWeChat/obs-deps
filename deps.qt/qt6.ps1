@@ -1,9 +1,9 @@
 param(
     [string] $Name = 'qt6',
-    [string] $Version = '6.6.2',
-    [string] $Uri = 'https://download.qt.io/official_releases/qt/6.6/6.6.2',
+    [string] $Version = '6.6.3',
+    [string] $Uri = 'https://download.qt.io/official_releases/qt/6.6/6.6.3',
     [string] $Hash = "${PSScriptRoot}/checksums",
-    [array] $Targets = @('x64', 'x86')
+    [array] $Targets = @('x64')
 )
 
 $QtComponents = @(
@@ -12,6 +12,7 @@ $QtComponents = @(
     'qtshadertools'
     'qtmultimedia'
     'qtsvg'
+    'qttools'
 )
 
 $Directory = 'qt6'
@@ -87,35 +88,29 @@ function Configure {
     $Options += @(
         '-DFEATURE_androiddeployqt:BOOL=OFF'
         '-DFEATURE_brotli:BOOL=OFF'
-        '-DFEATURE_cups:BOOL=OFF'
         '-DFEATURE_dbus:BOOL=OFF'
         '-DFEATURE_doubleconversion:BOOL=ON'
         '-DFEATURE_freetype:BOOL=OFF'
         '-DFEATURE_glib:BOOL=OFF'
         '-DFEATURE_harfbuzz:BOOL=ON'
         '-DFEATURE_icu:BOOL=OFF'
-        '-DFEATURE_itemmodeltester:BOOL=OFF'
-        '-DFEATURE_libjpeg:BOOL=ON'
-        '-DFEATURE_libpng:BOOL=ON'
+        '-DFEATURE_jpeg:BOOL=ON'
         '-DFEATURE_macdeployqt:BOOL=OFF'
-        '-DFEATURE_openssl:BOOL=OFF'
         '-DFEATURE_pcre2:BOOL=ON'
         '-DFEATURE_pdf:BOOL=OFF'
-        '-DFEATURE_printdialog:BOOL=OFF'
-        '-DFEATURE_printer:BOOL=OFF'
-        '-DFEATURE_printpreviewdialog:BOOL=OFF'
-        '-DFEATURE_printpreviewwidget:BOOL=OFF'
+        '-DFEATURE_png:BOOL=ON'
         '-DFEATURE_printsupport:BOOL=OFF'
         '-DFEATURE_qmake:BOOL=OFF'
         '-DFEATURE_schannel:BOOL=ON'
         '-DFEATURE_sql:BOOL=OFF'
         '-DFEATURE_system_doubleconversion:BOOL=OFF'
-        '-DFEATURE_system_libjpeg:BOOL=OFF'
-        '-DFEATURE_system_libpng:BOOL=OFF'
+        '-DFEATURE_system_jpeg:BOOL=OFF'
         '-DFEATURE_system_pcre2:BOOL=OFF'
+        '-DFEATURE_system_png:BOOL=OFF'
         '-DFEATURE_system_zlib:BOOL=OFF'
         '-DFEATURE_testlib:BOOL=OFF'
         '-DFEATURE_windeployqt:BOOL=OFF'
+        '-DINPUT_openssl:STRING=no'
         '-DQT_BUILD_BENCHMARKS:BOOL=OFF'
         '-DQT_BUILD_EXAMPLES:BOOL=OFF'
         '-DQT_BUILD_EXAMPLES_BY_DEFAULT:BOOL=OFF'
@@ -123,12 +118,12 @@ function Configure {
         '-DQT_BUILD_TESTS:BOOL=OFF'
         '-DQT_BUILD_TESTS_BY_DEFAULT:BOOL=OFF'
         '-DQT_BUILD_TOOLS_BY_DEFAULT:BOOL=OFF'
+        '-DQT_USE_VCPKG:BOOL=OFF'
         '-DCMAKE_IGNORE_PREFIX_PATH:PATH=C:/Strawberry/c'
     )
 
     $CMakeTarget = @{
         x64 = 'x64'
-        x86 = 'Win32'
     }
 
     $Options = ($Options -join ' ') -replace '-G Visual Studio \d+ \d+','-G Ninja' -replace "-A $($CMakeTarget[$Target])",''
@@ -212,7 +207,6 @@ function Qt-Add-Submodules {
 
     $CMakeTarget = @{
         x64 = 'x64'
-        x86 = 'Win32'
     }
 
     $QtComponents | Where-Object { $_ -ne 'qtbase' } | ForEach-Object {
@@ -227,6 +221,18 @@ function Qt-Add-Submodules {
                 $ComponentOptions += @(
                     '-DINPUT_tiff:STRING=qt'
                     '-DINPUT_webp:STRING=qt'
+                )
+            }
+            qttools {
+                $ComponentOptions += @(
+                    '-DFEATURE_assistant:BOOL=OFF'
+                    '-DFEATURE_designer:BOOL=ON'
+                    '-DFEATURE_linguist:BOOL=OFF'
+                    '-DFEATURE_pixeltool:BOOL=OFF'
+                    '-DFEATURE_qtattributionsscanner:BOOL=OFF'
+                    '-DFEATURE_qtdiag:BOOL=OFF'
+                    '-DFEATURE_qtplugininfo:BOOL=OFF'
+                    '-DQT_BUILD_TOOLS_BY_DEFAULT:BOOL=ON'
                 )
             }
         }

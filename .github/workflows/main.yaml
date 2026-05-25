@@ -60,12 +60,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86]
+        target: [x64]
         include:
           - target: x64
-            config: Release
-            type: static
-          - target: x86
             config: Release
             type: static
     defaults:
@@ -135,16 +132,16 @@ jobs:
           "artifactName=${ArtifactName}" >> $env:GITHUB_OUTPUT
           "artifactFileName=${FileName}" >> $env:GITHUB_OUTPUT
 
-      - name: Build ntv2 Debug
+      - name: Build libajantv2 Debug
         if: matrix.target == 'x64'
         shell: pwsh
         run: |
-          # Build ntv2 Debug
+          # Build libajantv2 Debug
 
           $Params = @{
             Target = '${{ matrix.target }}'
             Configuration = 'Debug'
-            Dependencies = 'ntv2'
+            Dependencies = 'libajantv2'
           }
 
           ./Build-Dependencies.ps1 @Params
@@ -166,6 +163,7 @@ jobs:
           Remove-Item -Recurse -Force ${{ github.workspace }}/windows_build_temp
 
       - name: Build qrcodegencpp Debug
+        if: matrix.target == 'x64'
         shell: pwsh
         run: |
           # Build qrcodegencpp Debug
@@ -200,7 +198,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86]
+        target: [x64]
         config: [RelWithDebInfo, Debug]
 
     steps:
@@ -236,7 +234,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86]
+        target: [x64]
     needs: [pre-checks, windows-qt6-build]
     steps:
       - name: Checkout
@@ -273,6 +271,7 @@ jobs:
         run: |
           : Package Windows dependencies
           shopt -s extglob
+          shopt -s nullglob
 
           for arch in x64 x86; do
             _temp=$(mktemp -d)
@@ -289,7 +288,10 @@ jobs:
             zip -r windows-deps-${{ steps.metadata.outputs.version }}-${arch}.zip -- *
             mv windows-deps-${{ steps.metadata.outputs.version }}-${arch}.zip ${GITHUB_WORKSPACE}
 
-            mv ${GITHUB_WORKSPACE}/qt6-windows-${arch}-!(*-@(Debug|RelWithDebInfo|Release|MinSizeRel))/*.zip ${GITHUB_WORKSPACE}
+            files=("${GITHUB_WORKSPACE}"/qt6-windows-"${arch}"-!(*-@(Debug|RelWithDebInfo|Release|MinSizeRel))/*.zip)
+            for artifact in "${files[@]}"; do
+              mv "${artifact}" "${GITHUB_WORKSPACE}"
+            done
             popd > /dev/null
           done
 
@@ -304,7 +306,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564
         with:
           draft: false
           prerelease: false

@@ -1,8 +1,9 @@
 param(
-    [string] $Name = 'ntv2',
-    [string] $Version = '16.2',
-    [string] $Uri = 'https://github.com/aja-video/ntv2.git',
-    [string] $Hash = '0acbac70a0b5e6509cca78cfbf69974c73c10db9',
+    [string] $Name = 'wil',
+    [string] $Version = 'v1.0.240803.1',
+    [string] $Uri = 'https://github.com/microsoft/wil.git',
+    [string] $Hash = 'f0c6a81c0c9a4b23b6801f40554b8bec425a83b4',
+    [array] $Targets = @('x64'),
     [switch] $ForceStatic = $true
 )
 
@@ -32,11 +33,9 @@ function Configure {
     $OnOff = @('OFF', 'ON')
     $Options = @(
         $CmakeOptions
-        "-DAJA_BUILD_SHARED:BOOL=$($OnOff[$Shared])"
-        '-DAJA_BUILD_OPENSOURCE:BOOL=ON'
-        '-DAJA_BUILD_APPS:BOOL=OFF'
-        '-DAJA_INSTALL_SOURCES:BOOL=OFF'
-        '-DAJA_INSTALL_HEADERS:BOOL=ON'
+        '-DFAST_BUILD:BOOL=ON'
+        '-DWIL_BUILD_TESTS:BOOL=OFF'
+        '-DWIL_BUILD_PACKAGING:BOOL=OFF'
     )
 
     Invoke-External cmake -S . -B "build_${Target}" @Options
@@ -62,27 +61,11 @@ function Install {
     Log-Information "Install (${Target})"
     Set-Location $Path
 
-    $Options = @(
-        '--install', "build_${Target}"
-        '--config', $Configuration
-    )
-
-    if ( $Configuration -match "(Release|MinSizeRel)" ) {
-        $Options += '--strip'
-    }
-
-    Invoke-External cmake @Options
-}
-
-function Fixup {
-    Log-Information "Fixup (${Target})"
-    Set-Location $Path
-
     $Params = @{
         ErrorAction = "SilentlyContinue"
         Path = @(
-            "$($ConfigData.OutputPath)/bin"
             "$($ConfigData.OutputPath)/lib"
+            "$($ConfigData.OutputPath)/include"
         )
         ItemType = "Directory"
         Force = $true
@@ -92,15 +75,16 @@ function Fixup {
 
     $Items = @(
         @{
-            Path = "$($ConfigData.OutputPath)/lib/ajantv2$(if ( $Configuration -eq 'Debug' ) { 'd' }).lib"
-            Destination = "$($ConfigData.OutputPath)/lib"
-            Force = $true
+            Path = "include/wil" 
+            Destination = "$($ConfigData.OutputPath)/include"
+            Recurse = $true
+            ErrorAction = 'SilentlyContinue'
         }
     )
 
     $Items | ForEach-Object {
         $Item = $_
         Log-Output ('{0} => {1}' -f ($Item.Path -join ", "), $Item.Destination)
-        Move-Item @Item
+        Copy-Item @Item
     }
 }

@@ -2,8 +2,8 @@ autoload -Uz log_debug log_error log_info log_status log_output
 
 ## Dependency Information
 local name='qt6'
-local version=6.6.2
-local url='https://download.qt.io/official_releases/qt/6.6/6.6.2'
+local version=6.6.3
+local url='https://download.qt.io/official_releases/qt/6.6/6.6.3'
 local hash="${0:a:h}/checksums"
 local -a patches=(
   "macos ${0:a:h}/patches/Qt6/mac/0001-QTBUG-121351.patch \
@@ -16,6 +16,7 @@ local -a qt_components=(
   'qtshadertools'
   'qtmultimedia'
   'qtsvg'
+  'qttools'
 )
 
 local dir='qt6'
@@ -109,30 +110,25 @@ config() {
     ${common_cmake_flags}
     -DFEATURE_androiddeployqt:BOOL=OFF
     -DFEATURE_brotli:BOOL=OFF
-    -DFEATURE_cups:BOOL=OFF
     -DFEATURE_dbus:BOOL=OFF
     -DFEATURE_doubleconversion:BOOL=ON
     -DFEATURE_glib:BOOL=OFF
-    -DFEATURE_itemmodeltester:BOOL=OFF
-    -DFEATURE_libjpeg:BOOL=ON
-    -DFEATURE_libpng:BOOL=ON
+    -DFEATURE_jpeg:BOOL=ON
     -DFEATURE_macdeployqt:BOOL=OFF
-    -DFEATURE_openssl:BOOL=OFF
     -DFEATURE_pcre2:BOOL=ON
     -DFEATURE_pdf:BOOL=OFF
-    -DFEATURE_printdialog:BOOL=OFF
-    -DFEATURE_printer:BOOL=OFF
-    -DFEATURE_printpreviewdialog:BOOL=OFF
-    -DFEATURE_printpreviewwidget:BOOL=OFF
+    -DFEATURE_png:BOOL=ON
     -DFEATURE_printsupport:BOOL=OFF
     -DFEATURE_qmake:BOOL=OFF
     -DFEATURE_sql:BOOL=OFF
     -DFEATURE_system_doubleconversion:BOOL=OFF
-    -DFEATURE_system_libjpeg:BOOL=OFF
-    -DFEATURE_system_libpng:BOOL=OFF
+    -DFEATURE_system_jpeg:BOOL=OFF
     -DFEATURE_system_pcre2:BOOL=OFF
+    -DFEATURE_system_png:BOOL=OFF
     -DFEATURE_system_zlib:BOOL=ON
+    -DFEATURE_testlib:BOOL=OFF
     -DFEATURE_windeployqt:BOOL=OFF
+    -DINPUT_openssl:STRING=no
     -DQT_BUILD_BENCHMARKS:BOOL=OFF
     -DQT_BUILD_EXAMPLES:BOOL=OFF
     -DQT_BUILD_EXAMPLES_BY_DEFAULT:BOOL=OFF
@@ -141,6 +137,7 @@ config() {
     -DQT_BUILD_TESTS_BY_DEFAULT:BOOL=OFF
     -DQT_BUILD_TOOLS_BY_DEFAULT:BOOL=OFF
     -DQT_CREATE_VERSIONED_HARD_LINK:BOOL=OFF
+    -DQT_USE_VCPKG:BOOL=OFF
   )
 
   log_info "Config qtbase (%F{3}${target}%f)"
@@ -213,6 +210,18 @@ qt_add_submodules() {
 
       local -a _args=(${common_cmake_flags})
       if [[ ${component} == qtimageformats ]] _args+=(-DINPUT_tiff:STRING=qt -DINPUT_webp:STRING=qt)
+      if [[ ${component} == qttools ]]; then
+        _args+=(
+          -DFEATURE_assistant:BOOL=OFF
+          -DFEATURE_designer:BOOL=ON
+          -DFEATURE_linguist:BOOL=OFF
+          -DFEATURE_pixeltool:BOOL=OFF
+          -DFEATURE_qtattributionsscanner:BOOL=OFF
+          -DFEATURE_qtdiag:BOOL=OFF
+          -DFEATURE_qtplugininfo:BOOL=OFF
+          -DQT_BUILD_TOOLS_BY_DEFAULT:BOOL=ON
+        )
+      fi
 
       pushd ${dir}/${component}
       log_debug "CMake configuration options: ${_args}'"

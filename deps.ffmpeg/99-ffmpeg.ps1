@@ -1,8 +1,8 @@
 param(
     [string] $Name = 'FFmpeg',
-    [string] $Version = '6.1.1',
+    [string] $Version = '7.0.2',
     [string] $Uri = 'https://github.com/FFmpeg/FFmpeg.git',
-    [string] $Hash = "e38092ef9395d7049f871ef4d5411eb410e283e0",
+    [string] $Hash = "e3a61e91030696348b56361bdf80ea358aef4a19",
     [array] $Patches = @(
         @{
             PatchFile = "${PSScriptRoot}/patches/FFmpeg/0001-flvdec-handle-unknown-Windows.patch"
@@ -12,7 +12,8 @@ param(
             PatchFile = "${PSScriptRoot}/patches/FFmpeg/0002-libaomenc-presets-Windows.patch"
             HashSum = "cec898b957fc289512094fc2c4e6a61d6872f716e4a643fb970c599a453a33f4"
         }
-    )
+    ),
+    [array] $Targets = @('x64')
 )
 
 function Setup {
@@ -88,7 +89,6 @@ function Configure {
         '--disable-sdl2'
         '--disable-doc'
         '--disable-postproc'
-        '--disable-mediafoundation'
         $(if ( ! $script:Shared ) { ('--pkg-config-flags=' + "'--static'") })
         $(if ( $Configuration -eq 'Debug' ) { '--enable-debug' } else { '--disable-debug' })
         $(if ( $Configuration -eq 'RelWithDebInfo' ) { '--disable-stripping' })
