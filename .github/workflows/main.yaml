@@ -124,7 +124,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
-          path: ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
+          path: |
+            ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
+            !${{ github.workspace }}/${{ matrix.target }}/*-dSYMs.tar.xz
 
   macos-build:
     name: Build macOS Dependencies
@@ -188,7 +190,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deps-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
-          path: ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
+          path: |
+            ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
+            !${{ github.workspace }}/${{ matrix.target }}/*-dSYMs.tar.xz
 
   ffmpeg-windows-build:
     name: Build FFmpeg for Windows
