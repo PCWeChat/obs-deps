@@ -65,12 +65,12 @@ config() {
     -DENABLE_TESTDATA=OFF
     -DENABLE_TESTS=OFF
     -DENABLE_TOOLS=OFF
-    -DENABLE_NASM=ON
   )
 
   case ${target} {
-    macos-*) args+=(-DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-macos.cmake") ;;
-    windows-x*) args+=(-DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-mingw-gcc.cmake")
+    macos-x86_64) args+=(-DENABLE_NASM=OFF -DAOM_TARGET_CPU=generic -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-macos.cmake") ;;
+    macos-*) args+=(-DENABLE_NASM=ON -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-macos.cmake") ;;
+    windows-x*) args+=(-DENABLE_NASM=ON -DCMAKE_TOOLCHAIN_FILE="build/cmake/toolchains/${target_config[cmake_arch]}-mingw-gcc.cmake")
   }
 
   log_info "Config (%F{3}${target}%f)"

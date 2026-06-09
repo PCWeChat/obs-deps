@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - flobs
+      - flobs-release-32.0
     tags:
       - "20[2-9][0-9]-[0-9][0-9]-[0-9][0-9]"
   pull_request:
@@ -11,10 +12,14 @@ on:
       - "**.md"
     branches:
       - flobs
+      - flobs-release-32.0
 
 concurrency:
   group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write
 
 jobs:
   pre-checks:
@@ -53,6 +58,144 @@ jobs:
 
           echo "shortHash=${GITHUB_SHA:0:9}" >> $GITHUB_OUTPUT
 
+  ffmpeg-macos-build:
+    name: Build FFmpeg for macOS
+    runs-on: macos-14
+    needs: pre-checks
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [macos-arm64, macos-x86_64]
+        include:
+          - target: macos-arm64
+            config: Release
+            type: static
+          - target: macos-x86_64
+            config: Release
+            type: static
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        id: setup
+        run: |
+          : Setup Environment
+          print '::group::Enable Xcode 15.2'
+          sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+          print '::endgroup::'
+
+          print '::group::Install/upgrade nasm'
+          brew install nasm || brew upgrade nasm
+          print '::endgroup::'
+
+          local -a to_remove=()
+
+          for formula (llvm gcc postgresql openjdk sox libsndfile flac libvorbis opusfile \
+            libogg composer php gd freetype fontconfig webp libpng lame libtiff opus kotlin \
+            sbt libxft libxcb) {
+            if [[ -d /usr/local/opt/${formula} ]] to_remove+=(${formula})
+          }
+
+          if (( #to_remove )) brew uninstall --ignore-dependencies ${to_remove}
+
+          local -r date_string=$(date +"%Y-%m-%d")
+          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
+
+      - name: Restore Compilation Cache
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ matrix.target }}-ccache-ffmpeg-${{ steps.setup.outputs.ccacheDate }}
+          restore-keys: |
+            ${{ matrix.target }}-ccache-ffmpeg-
+
+      - name: Build FFmpeg
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          target: ${{ matrix.target }}
+          type: ${{ matrix.type }}
+          config: ${{ matrix.config }}
+
+      - name: Publish Build Artifacts
+        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
+          path: |
+            ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
+            !${{ github.workspace }}/${{ matrix.target }}/*-dSYMs.tar.xz
+
+  macos-build:
+    name: Build macOS Dependencies
+    runs-on: macos-14
+    needs: pre-checks
+    strategy:
+      fail-fast: true
+      matrix:
+        target: [macos-arm64, macos-x86_64]
+        include:
+          - target: macos-arm64
+            config: Release
+            type: static
+          - target: macos-x86_64
+            config: Release
+            type: static
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        id: setup
+        run: |
+          : Setup Environment
+          print '::group::Enable Xcode 15.2'
+          sudo xcode-select --switch /Applications/Xcode_15.2.app/Contents/Developer
+          print '::endgroup::'
+
+          to_remove=()
+
+          for formula (llvm gcc) {
+            if [[ -d /usr/local/opt/"${formula}" ]] to_remove+=(${formula})
+          }
+
+          if (( #to_remove )) brew uninstall --ignore-dependencies ${to_remove}
+
+          local -r date_string=$(date +"%Y-%m-%d")
+          print "ccacheDate=${date_string}" >> $GITHUB_OUTPUT
+
+      - name: Restore Compilation Cache
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ matrix.target }}-ccache-deps-${{ matrix.config }}-${{ steps.setup.outputs.ccacheDate }}
+          restore-keys: |
+            ${{ matrix.target }}-ccache-deps-${{ matrix.config }}-
+
+      - name: Build macOS Dependencies
+        uses: ./.github/actions/build-deps
+        with:
+          target: ${{ matrix.target }}
+          type: ${{ matrix.type }}
+          config: ${{ matrix.config }}
+
+      - name: Publish Build Artifacts
+        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
+        uses: actions/upload-artifact@v4
+        with:
+          name: deps-macos-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
+          path: |
+            ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
+            !${{ github.workspace }}/${{ matrix.target }}/*-dSYMs.tar.xz
+
   ffmpeg-windows-build:
     name: Build FFmpeg for Windows
     runs-on: windows-2022
@@ -60,12 +203,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        target: [x64, x86]
+        target: [x64]
         include:
           - target: x64
-            config: Release
-            type: static
-          - target: x86
             config: Release
             type: static
     defaults:
@@ -135,16 +275,16 @@ jobs:
           "artifactName=${ArtifactName}" >> $env:GITHUB_OUTPUT
           "artifactFileName=${FileName}" >> $env:GITHUB_OUTPUT
 
-      - name: Build ntv2 Debug
+      - name: Build libajantv2 Debug
         if: matrix.target == 'x64'
         shell: pwsh
         run: |
-          # Build ntv2 Debug
+          # Build libajantv2 Debug
 
           $Params = @{
             Target = '${{ matrix.target }}'
             Configuration = 'Debug'
-            Dependencies = 'ntv2'
+            Dependencies = 'libajantv2'
           }
 
           ./Build-Dependencies.ps1 @Params
@@ -166,6 +306,7 @@ jobs:
           Remove-Item -Recurse -Force ${{ github.workspace }}/windows_build_temp
 
       - name: Build qrcodegencpp Debug
+        if: matrix.target == 'x64'
         shell: pwsh
         run: |
           # Build qrcodegencpp Debug
@@ -193,69 +334,36 @@ jobs:
           name: ${{ steps.setup.outputs.artifactName }}
           path: ${{ github.workspace }}\windows\${{ steps.setup.outputs.artifactFileName }}
 
-  windows-qt6-build:
-    name: Build Qt6 (Windows)
-    runs-on: windows-2022
-    needs: pre-checks
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [x64, x86]
-        config: [RelWithDebInfo, Debug]
-
+  macos-universal-build:
+    name: Create macOS Universal Build
+    runs-on: macos-14
+    needs: [pre-checks, ffmpeg-macos-build, macos-build]
+    defaults:
+      run:
+        shell: zsh --no-rcs --errexit --pipefail {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Environment
-        id: setup
-        run: |
-          # Setup Environment
-          $ArtifactName="qt6-windows-${{ matrix.target }}-${{ matrix.config }}-${{ needs.pre-checks.outputs.shortHash }}"
-          $FileName="windows-deps-qt6-$(Get-Date -Format 'yyyy-MM-dd')-${{ matrix.target }}-${{ matrix.config }}.zip"
-
-          "artifactName=${ArtifactName}" >> $env:GITHUB_OUTPUT
-          "artifactFileName=${FileName}" >> $env:GITHUB_OUTPUT
-
-      - name: Build Windows Qt
-        uses: ./.github/actions/build-qt
+      - name: Create universal FFmpeg
+        uses: ./.github/actions/create-universal
         with:
-          target: ${{ matrix.target }}
-          config: ${{ matrix.config }}
+          arm64: ffmpeg-macos-macos-arm64-${{ needs.pre-checks.outputs.shortHash }}
+          x86_64: ffmpeg-macos-macos-x86_64-${{ needs.pre-checks.outputs.shortHash }}
+          outputName: ffmpeg-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
 
-      - name: Publish Build Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
+      - name: Create universal deps
+        uses: ./.github/actions/create-universal
         with:
-          name: ${{ steps.setup.outputs.artifactName }}
-          path: ${{ github.workspace }}/windows/${{ steps.setup.outputs.artifactFileName }}
-
-  windows-qt6-package:
-    name: Package Windows Qt6
-    runs-on: windows-2022
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [x64, x86]
-    needs: [pre-checks, windows-qt6-build]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Create Windows Qt package
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: ./.github/actions/package-windows-qt
-        with:
-          releaseArtifact: qt6-windows-${{ matrix.target }}-RelWithDebInfo-${{ needs.pre-checks.outputs.shortHash }}
-          debugArtifact: qt6-windows-${{ matrix.target }}-Debug-${{ needs.pre-checks.outputs.shortHash }}
-          outputName: qt6-windows-${{ matrix.target }}-${{ needs.pre-checks.outputs.shortHash }}
-          pdbOutputName: qt6-windows-${{ matrix.target }}-PDBs-${{ needs.pre-checks.outputs.shortHash }}
+          arm64: deps-macos-macos-arm64-${{ needs.pre-checks.outputs.shortHash }}
+          x86_64: deps-macos-macos-x86_64-${{ needs.pre-checks.outputs.shortHash }}
+          outputName: deps-macos-universal-${{ needs.pre-checks.outputs.shortHash }}
 
   make-release:
     name: Create and upload release
     runs-on: ubuntu-22.04
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-    needs: [ffmpeg-windows-build, windows-build, windows-qt6-package]
+    needs: [ffmpeg-macos-build, macos-build, macos-universal-build, ffmpeg-windows-build, windows-build]
     defaults:
       run:
         shell: bash
@@ -273,12 +381,13 @@ jobs:
         run: |
           : Package Windows dependencies
           shopt -s extglob
+          shopt -s nullglob
 
           for arch in x64 x86; do
             _temp=$(mktemp -d)
             pushd "${_temp}" > /dev/null
 
-            for artifact in ${GITHUB_WORKSPACE}/**/windows-@(deps|ffmpeg)-!(qt6*)-${arch}.*; do
+            for artifact in ${GITHUB_WORKSPACE}/**/windows-@(deps|ffmpeg)-*-${arch}.*; do
               case ${artifact} in
                 *.zip) unzip -o ${artifact} > /dev/null ;;
                 *.tar.xz) XZ_OPT=-T0 tar -xJf ${artifact} ;;
@@ -289,7 +398,37 @@ jobs:
             zip -r windows-deps-${{ steps.metadata.outputs.version }}-${arch}.zip -- *
             mv windows-deps-${{ steps.metadata.outputs.version }}-${arch}.zip ${GITHUB_WORKSPACE}
 
-            mv ${GITHUB_WORKSPACE}/qt6-windows-${arch}-!(*-@(Debug|RelWithDebInfo|Release|MinSizeRel))/*.zip ${GITHUB_WORKSPACE}
+            popd > /dev/null
+          done
+
+      - name: Package macOS dependencies
+        run: |
+          : Package macOS dependencies
+          shopt -s extglob
+          shopt -s nullglob
+
+          for arch in arm64 x86_64 universal; do
+            _temp=$(mktemp -d)
+            pushd "${_temp}" > /dev/null
+
+            for artifact in ${GITHUB_WORKSPACE}/**/macos-@(deps|ffmpeg)-!(qt6*)-${arch}?(-dSYMs).*; do
+              case ${artifact} in
+                *.zip) unzip -o ${artifact} > /dev/null ;;
+                *.tar.xz) XZ_OPT=-T0 tar -xJf ${artifact} ;;
+                *.tar.gz) tar -xzf ${artifact} ;;
+              esac
+            done
+
+            if [ "$(ls -A . 2>/dev/null)" ]; then
+              XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz -- !(*.dSYM)
+              mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}.tar.xz ${GITHUB_WORKSPACE}
+
+              if compgen -G "*.dSYM" > /dev/null; then
+                XZ_OPT=-T0 tar -cJf macos-deps-${{ steps.metadata.outputs.version }}-${arch}-dSYMs.tar.xz -- *.dSYM
+                mv macos-deps-${{ steps.metadata.outputs.version }}-${arch}-dSYMs.tar.xz ${GITHUB_WORKSPACE}
+              fi
+            fi
+
             popd > /dev/null
           done
 
@@ -304,7 +443,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564
         with:
           draft: false
           prerelease: false
@@ -314,3 +453,4 @@ jobs:
           files: |
             ${{ github.workspace }}/windows-*-x64*.zip
             ${{ github.workspace }}/windows-*-x86*.zip
+            ${{ github.workspace }}/macos-deps-*.tar.xz
