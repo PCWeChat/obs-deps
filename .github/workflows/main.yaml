@@ -196,50 +196,50 @@ jobs:
             ${{ github.workspace }}/${{ matrix.target }}/*.tar.xz
             !${{ github.workspace }}/${{ matrix.target }}/*-dSYMs.tar.xz
 
-  ffmpeg-windows-build:
-    name: Build FFmpeg for Windows
-    runs-on: windows-2022
-    needs: pre-checks
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [x64]
-        include:
-          - target: x64
-            config: Release
-            type: static
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  # ffmpeg-windows-build:
+  #   name: Build FFmpeg for Windows
+  #   runs-on: windows-2022
+  #   needs: pre-checks
+  #   strategy:
+  #     fail-fast: true
+  #     matrix:
+  #       target: [x64]
+  #       include:
+  #         - target: x64
+  #           config: Release
+  #           type: static
+  #   defaults:
+  #     run:
+  #       shell: pwsh
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Setup Environment
-        id: setup
-        run: |
-          # Setup Environment
+  #     - name: Setup Environment
+  #       id: setup
+  #       run: |
+  #         # Setup Environment
 
-          $Target='${{ matrix.target }}'
-          $ArtifactName="ffmpeg-windows-${Target}-${{ needs.pre-checks.outputs.shortHash }}"
-          $FileName="windows-ffmpeg-$(Get-Date -Format 'yyyy-MM-dd')-${Target}.zip"
+  #         $Target='${{ matrix.target }}'
+  #         $ArtifactName="ffmpeg-windows-${Target}-${{ needs.pre-checks.outputs.shortHash }}"
+  #         $FileName="windows-ffmpeg-$(Get-Date -Format 'yyyy-MM-dd')-${Target}.zip"
 
-          "artifactName=${ArtifactName}" >> $env:GITHUB_OUTPUT
-          "artifactFileName=${FileName}" >> $env:GITHUB_OUTPUT
+  #         "artifactName=${ArtifactName}" >> $env:GITHUB_OUTPUT
+  #         "artifactFileName=${FileName}" >> $env:GITHUB_OUTPUT
 
-      - name: Build FFmpeg
-        uses: ./.github/actions/build-ffmpeg
-        with:
-          target: ${{ matrix.target }}
-          type: ${{ matrix.type }}
-          config: ${{ matrix.config }}
+  #     - name: Build FFmpeg
+  #       uses: ./.github/actions/build-ffmpeg
+  #       with:
+  #         target: ${{ matrix.target }}
+  #         type: ${{ matrix.type }}
+  #         config: ${{ matrix.config }}
 
-      - name: Publish Build Artifacts
-        if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.artifactName }}
-          path: ${{ github.workspace }}\windows\${{ steps.setup.outputs.artifactFileName }}
+  #     - name: Publish Build Artifacts
+  #       if: github.event_name != 'pull_request' || fromJSON(needs.pre-checks.outputs.seekingTesters)
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ${{ steps.setup.outputs.artifactName }}
+  #         path: ${{ github.workspace }}\windows\${{ steps.setup.outputs.artifactFileName }}
 
   windows-build:
     name: Build Windows Dependencies
@@ -363,7 +363,7 @@ jobs:
     name: Create and upload release
     runs-on: ubuntu-22.04
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-    needs: [ffmpeg-macos-build, macos-build, macos-universal-build, ffmpeg-windows-build, windows-build]
+    needs: [ffmpeg-macos-build, macos-build, macos-universal-build, windows-build]
     defaults:
       run:
         shell: bash

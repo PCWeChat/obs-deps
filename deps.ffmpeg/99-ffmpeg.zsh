@@ -214,6 +214,7 @@ config() {
     --disable-doc
     --disable-postproc
     --disable-stripping
+    --disable-nvenc
   )
 
   if (( ! shared_libs )) args+=(--pkg-config-flags="--static")
