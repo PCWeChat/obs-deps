@@ -1,0 +1,24 @@
+--- ./build/make/gen_msvs_sln.sh
++++ ./build/make/gen_msvs_sln.sh
+@@ -182,6 +182,12 @@
+         local config=${sln_config%%|*}
+         local platform=${sln_config##*|}
+         local nows_sln_config=`echo $sln_config | sed -e 's/[^a-zA-Z0-9]/_/g'`
++        # Only Release libraries are consumed by obs-deps. The Debug
++        # configuration produces nasm objects that Lib.exe rejects with
++        # "fatal error LNK1136: invalid or corrupt file".
++        if [ "${config}" = "Debug" ]; then
++            continue
++        fi
+         cat <<EOF
+ BUILD_TARGETS += \$(if \$(NO_LAUNCH_DEVENV),,$nows_sln_config)
+ clean::
+@@ -189,7 +195,7 @@
+ .PHONY: $nows_sln_config
+ ifneq (\$(found_devenv),)
+ $nows_sln_config: $outfile
+-${TAB}\$(MSBUILD_TOOL) $outfile -m -t:Build \\
++${TAB}\$(MSBUILD_TOOL) $outfile -m:1 -t:Build \\
+ ${TAB}${TAB}-p:Configuration="$config" -p:Platform="$platform"
+ else
+ $nows_sln_config: $outfile .nodevenv.once

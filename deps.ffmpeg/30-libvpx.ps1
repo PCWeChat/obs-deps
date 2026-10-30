@@ -3,7 +3,13 @@ param(
     [string] $Version = '1.14.1',
     [string] $Uri = 'https://github.com/webmproject/libvpx/archive/refs/tags/v1.14.1.zip',
     [string] $Hash = "${PSScriptRoot}/checksums/v1.14.1.zip.sha256",
-    [array] $Targets = @('x64', 'arm64')
+    [array] $Targets = @('x64', 'arm64'),
+    [array] $Patches = @(
+        @{
+            PatchFile = "${PSScriptRoot}/patches/libvpx/0003-disable-msbuild-multiproc.patch"
+            HashSum = "967a940c3167f5790bcb15acfb1a8677538112050cbe7469acc2d916cc4fd4b3"
+        }
+    )
 )
 
 function Setup {
@@ -21,6 +27,16 @@ function Clean {
     if ( Test-Path "build_${Target}" ) {
         Log-Information "Clean build directory (${Target})"
         Remove-Item -Path "build_${Target}" -Recurse -Force
+    }
+}
+
+function Patch {
+    Log-Information "Patch (${Target})"
+    Set-Location "${Name}-${Version}"
+
+    $Patches | ForEach-Object {
+        $Params = $_
+        Safe-Patch @Params
     }
 }
 
@@ -79,10 +95,15 @@ function Build {
     Log-Information "Build (${Target})"
     Set-Location "${Name}-${Version}"
 
+    # 不能把 Release_<cfg> 当作 make 目标显式传入：vpx.sln.mk 要等 .projects
+    # 跑完才生成，make 解析阶段还没有该规则，会直接 "No rule to make target"。
+    # 因此保持默认目标，由 patches/libvpx/0003-disable-msbuild-multiproc.patch
+    # 在生成阶段就剔除 Debug 配置（其 nasm 产物会被 Lib.exe 判为
+    # "fatal error LNK1136: invalid or corrupt file"）并将 msbuild 降为 -m:1。
     $Params = @{
         BasePath = (Get-Location | Convert-Path)
         BuildPath = "build_${Target}"
-        BuildCommand = "make -j${env:NUMBER_OF_PROCESSORS}"
+        BuildCommand = "make"
         Target = $Target
     }
 

@@ -92,6 +92,9 @@ package() {
 
     if [[ ${PACKAGE_NAME} == ffmpeg ]] rm -rf -- lib/*.a(N)
 
+    # x264 is GPL and must not be shipped in any archive
+    rm -rf -- lib/libx264*(N) bin/*x264*(N) licenses/x264(N)
+
     if [[ -f bin/swig ]] {
       swig_lib=(share/swig/*(/))
       pushd ${swig_lib:h}

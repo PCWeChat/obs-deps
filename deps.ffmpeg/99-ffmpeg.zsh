@@ -197,8 +197,10 @@ config() {
     --extra-cflags="${ff_cflags}"
     --extra-cxxflags="${ff_cxxflags}"
     --extra-ldflags="${ff_ldflags}"
-    # --enable-version3
-    # --enable-gpl
+    --disable-gpl
+    --disable-version3
+    --disable-nonfree
+    --disable-libx264
     --disable-libaom
     --disable-libsvtav1
     --disable-libopus
