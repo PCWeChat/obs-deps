@@ -1,8 +1,9 @@
 param(
     [string] $Name = 'FFmpeg',
-    [string] $Version = '6.1.1',
+    [string] $Version = '7.1.1',
     [string] $Uri = 'https://github.com/FFmpeg/FFmpeg.git',
-    [string] $Hash = "e38092ef9395d7049f871ef4d5411eb410e283e0",
+    [string] $Hash = "db69d06eeeab4f46da15030a80d539efb4503ca8",
+    [array] $Targets = @('x64'),
     [array] $Patches = @(
         @{
             PatchFile = "${PSScriptRoot}/patches/FFmpeg/0001-flvdec-handle-unknown-Windows.patch"
@@ -22,6 +23,7 @@ function Setup {
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar nasm
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar make
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar perl
+        Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar gcc
         Invoke-External pacman.exe -S --noconfirm --needed --noprogressbar pkgconf
     }
 }
@@ -88,7 +90,6 @@ function Configure {
         '--disable-sdl2'
         '--disable-doc'
         '--disable-postproc'
-        '--disable-mediafoundation'
         $(if ( ! $script:Shared ) { ('--pkg-config-flags=' + "'--static'") })
         $(if ( $Configuration -eq 'Debug' ) { '--enable-debug' } else { '--disable-debug' })
         $(if ( $Configuration -eq 'RelWithDebInfo' ) { '--disable-stripping' })

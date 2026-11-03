@@ -29,13 +29,6 @@ function Setup-BuildParameters {
         . $PSScriptRoot/Logger.ps1
     }
 
-    $NumProcessors = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
-
-    if ( $NumProcessors -gt 1 ) {
-        $env:UseMultiToolTask = $true
-        $env:EnforceProcessCountAcrossBuilds = $true
-    }
-
     $VisualStudioData = Find-VisualStudio
 
     $VisualStudioId = "Visual Studio {0} {1}" -f @(
